@@ -263,6 +263,11 @@
         chdir: "{{ smai_path }}/frontend"
       when: not npm_stat.stat.exists
 
+    - name: ▶︎ 6f. Instalar requirements.txt del backend con pip
+      command: pip install --break-system-packages -r requirements.txt
+      args:
+        chdir: "{{ smai_path }}/backend"
+
   handlers:
     - name: Reiniciar PostgreSQL
       service:
