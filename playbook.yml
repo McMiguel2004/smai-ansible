@@ -143,14 +143,15 @@
       changed_when: false
 
     - name: ▶︎ 5.2 Crear rol usuario si no existe
-      become_user: postgres
-      postgresql_user:
-        name: "{{ pg_user }}"
-        password: "{{ pg_pass }}"
-        privs: ALL
-        db: smai
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        db: "{{ db_name }}"
         state: present
-      when: role_exists.stdout != "1"
+        login_user: "postgres"
+        login_password: "{{ postgres_password }}"
+      become: true
+
 
     - name: ▶︎ 5.3 Asegurar privilegios de usuario en la base de datos
       become_user: postgres
