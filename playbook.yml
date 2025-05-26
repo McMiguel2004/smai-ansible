@@ -1,0 +1,292 @@
+---
+- hosts: localhost
+  become: yes
+  gather_facts: yes
+
+  vars_prompt:
+    - name: ansible_sudo_pass
+      prompt: "Introduce tu contraseña sudo"
+      private: yes
+
+  vars:
+    repo_url: "https://github.com/McMiguel2004/smaiV2-main.git"
+    # Capturamos el HOME real del usuario que lanza ansible, no el de root
+    user_home: "{{ lookup('env','HOME') }}"
+    smai_path: "{{ user_home }}/SmaiV2"
+    pg_user: "usuario"
+    pg_pass: "usuario"
+
+  tasks:
+    - name: ▶︎ 1a. Comprobar si git está instalado
+      command: git --version
+      register: git_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 1b. Instalar git y snapd si faltan
+      apt:
+        name:
+          - git
+          - snapd
+        update_cache: yes
+        state: present
+      when: git_check.rc != 0
+
+    - name: ▶︎ 2a. Comprobar si Docker está instalado (snap)
+      command: snap list docker
+      register: docker_snap
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 2b. Instalar Docker via snap si falta
+      snap:
+        name: docker
+        state: present
+      when: docker_snap.rc != 0
+
+    - name: ▶︎ 3a. Comprobar si Node.js v16 está instalado
+      command: node --version
+      register: node_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 3b. Instalar Node.js v16 LTS si falta
+      block:
+        - apt_key:
+            url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+            state: present
+        - apt_repository:
+            repo: "deb https://deb.nodesource.com/node_16.x {{ ansible_distribution_release }} main"
+            state: present
+            filename: nodesource
+        - apt:
+            update_cache: yes
+        - apt:
+            name: nodejs
+            state: present
+      when: node_check.rc != 0
+
+    - name: ▶︎ 4a. Comprobar si Python3 está instalado
+      command: python3 --version
+      register: py_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 4b. Instalar Python3, pip, setuptools si falta
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-setuptools
+          - python3-wheel
+        state: present
+      when: py_check.rc != 0
+
+    - name: ▶︎ 5a. Comprobar si PostgreSQL está instalado
+      command: psql --version
+      register: pg_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 5b. Instalar PostgreSQL si falta
+      apt:
+        name: postgresql
+        state: present
+      when: pg_check.rc != 0
+
+    - name: ▶︎ 5c. Buscar pg_hba.conf
+      find:
+        paths: /etc/postgresql
+        patterns: pg_hba.conf
+      register: pg_hba_find
+
+    - name: ▶︎ 5d. Ajustar pg_hba.conf a md5 si existe y contiene peer
+      replace:
+        path: "{{ pg_hba_find.files[0].path }}"
+        regexp: '^local\s+all\s+all\s+peer'
+        replace: 'local   all             all                                     md5'
+      when:
+        - pg_hba_find.files | length > 0
+        - "'peer' in lookup('file', pg_hba_find.files[0].path)"
+      notify: Reiniciar PostgreSQL
+
+    - name: ▶︎ 5.1 Comprobar si base de datos smai existe
+      become_user: postgres
+      shell: psql -tAc "SELECT 1 FROM pg_database WHERE datname='smai'"
+      register: db_exists
+      changed_when: false
+
+    - name: ▶︎ 5.1 Crear base de datos smai si no existe
+      become_user: postgres
+      postgresql_db:
+        name: smai
+        state: present
+      when: db_exists.stdout != "1"
+
+    - name: ▶︎ 5.2 Comprobar si rol usuario existe
+      become_user: postgres
+      shell: psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='{{ pg_user }}'"
+      register: role_exists
+      changed_when: false
+
+    - name: ▶︎ 5.2 Crear rol usuario si no existe
+      become_user: postgres
+      postgresql_user:
+        name: "{{ pg_user }}"
+        password: "{{ pg_pass }}"
+        privs: ALL
+        db: smai
+        state: present
+      when: role_exists.stdout != "1"
+
+    - name: ▶︎ 5.3 Asegurar privilegios de usuario en la base de datos
+      become_user: postgres
+      postgresql_privs:
+        db: smai
+        roles: "{{ pg_user }}"
+        type: database
+        privs: ALL
+
+    - name: ▶︎ 5.4 Crear o actualizar tipo ENUM difficulty_enum
+      become_user: postgres
+      postgresql_query:
+        db: smai
+        query: |
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'difficulty_enum') THEN
+              CREATE TYPE difficulty_enum AS ENUM ('hard','normal','easy','peaceful');
+            END IF;
+          END$$;
+
+    - name: ▶︎ 5.5 Crear tipo ENUM mode_enum si no existe
+      become_user: postgres
+      postgresql_query:
+        db: smai
+        query: |
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'mode_enum') THEN
+              CREATE TYPE mode_enum AS ENUM ('creative','survival','adventure','spectator');
+            END IF;
+          END$$;
+
+    - name: ▶︎ 5.6 Crear tablas si no existen
+      become_user: postgres
+      postgresql_query:
+        db: smai
+        query: |
+          CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            password VARCHAR(255) NOT NULL,
+            token TEXT DEFAULT '',
+            jwt TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            servers_created INT DEFAULT 0
+          );
+          CREATE TABLE IF NOT EXISTS wireguard_configs (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE CASCADE,
+            wireguard_conf TEXT NOT NULL,
+            wireguard_public_key VARCHAR(255) NOT NULL,
+            wireguard_private_key VARCHAR(255) NOT NULL,
+            wireguard_ip VARCHAR(15) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE TABLE IF NOT EXISTS servers (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            software VARCHAR(50) NOT NULL,
+            version VARCHAR(20) NOT NULL,
+            curseforge_modpack_url VARCHAR(500),
+            user_id INT REFERENCES users(id) ON DELETE CASCADE,
+            container_id VARCHAR(255),
+            status VARCHAR(20) DEFAULT 'stopped',
+            ip_address VARCHAR(255),
+            port INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE TABLE IF NOT EXISTS server_properties (
+            id SERIAL PRIMARY KEY,
+            server_id INT REFERENCES servers(id) ON DELETE CASCADE,
+            difficulty difficulty_enum DEFAULT 'easy',
+            mode mode_enum DEFAULT 'survival',
+            max_players INT DEFAULT 20,
+            max_build_height INT DEFAULT 256,
+            view_distance INT DEFAULT 10,
+            spawn_npcs BOOLEAN DEFAULT TRUE,
+            allow_nether BOOLEAN DEFAULT TRUE,
+            spawn_animals BOOLEAN DEFAULT TRUE,
+            spawn_monsters BOOLEAN DEFAULT TRUE,
+            pvp BOOLEAN DEFAULT TRUE,
+            enable_command_block BOOLEAN DEFAULT FALSE,
+            allow_flight BOOLEAN DEFAULT FALSE
+          );
+
+    - name: ▶︎ 5.7 Asegurar permisos sobre tablas y secuencias
+      become_user: postgres
+      postgresql_query:
+        db: smai
+        query: |
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ pg_user }};
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ pg_user }};
+          GRANT ALL PRIVILEGES ON SCHEMA public TO {{ pg_user }};
+
+    - name: ▶︎ 6a. Comprobar si repo existe
+      stat:
+        path: "{{ smai_path }}/.git"
+      register: repo_stat
+
+    - name: ▶︎ 6b. Clonar SmaiV2 si no existe
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ smai_path }}"
+        update: yes
+      when: not repo_stat.stat.exists
+
+    - name: ▶︎ 6c. Actualizar repo si existía
+      command: git pull
+      args:
+        chdir: "{{ smai_path }}"
+      when: repo_stat.stat.exists
+
+    - name: ▶︎ 6d. Comprobar node_modules en frontend
+      stat:
+        path: "{{ smai_path }}/frontend/node_modules"
+      register: npm_stat
+
+    - name: ▶︎ 6e. npm install si no existe node_modules
+      command: npm install
+      args:
+        chdir: "{{ smai_path }}/frontend"
+      when: not npm_stat.stat.exists
+
+    - name: ▶︎ 6f. pip install backend requirements
+      pip:
+        requirements: "{{ smai_path }}/backend/requirements.txt"
+        executable: pip3
+
+    - name: ▶︎ 7a. Comprobar sudoers existente
+      stat:
+        path: /etc/sudoers.d/smai_custom
+      register: sudoers_stat
+
+    - name: ▶︎ 7b. Escribir sudoers para Docker y WireGuard si no existe
+      copy:
+        dest: /etc/sudoers.d/smai_custom
+        content: |
+          www-data ALL=(ALL) NOPASSWD: /usr/bin/docker
+          www-data ALL=(ALL) NOPASSWD: /usr/bin/docker *
+          {{ ansible_env.USER }} ALL=(ALL) NOPASSWD: /usr/bin/wg, /bin/cat, /bin/bash -c cat /tmp/peer_c>
+        owner: root
+        group: root
+        mode: '0440'
+      when: not sudoers_stat.stat.exists
+
+  handlers:
+    - name: Reiniciar PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
