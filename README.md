@@ -30,10 +30,10 @@ Este repositorio contiene un playbook Ansible que configura **localmente** todo 
 
 ## Estructura de archivos
 
-smai-ansible/
-├── inventory # Inventario local (localhost)
-├── playbook.yml # Playbook principal
-└── README.md # Documentación
+- smai-ansible/
+- ├── inventory # Inventario local (localhost)
+- ├── playbook.yml # Playbook principal
+- └── README.md # Documentación
 
 
 
