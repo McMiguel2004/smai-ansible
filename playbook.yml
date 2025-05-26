@@ -14,6 +14,7 @@
     smai_path: "{{ user_home }}/SmaiV2"
     pg_user: "usuario"
     pg_pass: "usuario"
+    ansible_python_interpreter: /usr/bin/python3   # Forzar uso de python3
 
   tasks:
     - name: ▶︎ 1a. Comprobar si git está instalado
@@ -80,6 +81,11 @@
           - python3-wheel
         state: present
       when: py_check.rc != 0
+
+    - name: ▶︎ 4c. Instalar psycopg2-binary para soporte PostgreSQL en Ansible
+      pip:
+        name: psycopg2-binary
+        executable: pip3
 
     - name: ▶︎ 5a. Comprobar si PostgreSQL está instalado
       command: psql --version
@@ -273,16 +279,14 @@
         path: /etc/sudoers.d/smai_custom
       register: sudoers_stat
 
-    - name: ▶︎ 7b. Escribir sudoers para Docker y WireGuard si no existe
+    - name: ▶︎ 7b. Añadir sudoers para docker si no existe
       copy:
         dest: /etc/sudoers.d/smai_custom
         content: |
-          www-data ALL=(ALL) NOPASSWD: /usr/bin/docker
-          www-data ALL=(ALL) NOPASSWD: /usr/bin/docker *
-          {{ ansible_env.USER }} ALL=(ALL) NOPASSWD: /usr/bin/wg, /bin/cat, /bin/bash -c cat /tmp/peer_config
-        owner: root
-        group: root
-        mode: '0440'
+          %sudo ALL=(ALL) NOPASSWD: /usr/bin/docker
+          %sudo ALL=(ALL) NOPASSWD: /usr/bin/docker-compose
+          Defaults !requiretty
+      mode: '0440'
       when: not sudoers_stat.stat.exists
 
   handlers:
