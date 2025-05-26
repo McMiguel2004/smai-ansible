@@ -19,6 +19,19 @@
 
   tasks:
 
+    - name: ▶︎ 0. Añadir permiso sudo sin contraseña para el usuario actual
+      block:
+        - name: Añadir usuario a sudoers para sudo sin contraseña con visudo seguro
+          lineinfile:
+            dest: /etc/sudoers
+            regexp: '^{{ ansible_env.USER }} ALL=\(ALL\) NOPASSWD: ALL'
+            line: '{{ ansible_env.USER }} ALL=(ALL) NOPASSWD: ALL'
+            validate: 'visudo -cf %s'
+          become: yes
+      rescue:
+        - debug:
+            msg: "El usuario ya tiene permisos sudo sin contraseña o hubo un problema."
+
     - name: ▶︎ 1a. Comprobar si git está instalado
       command: git --version
       register: git_check
@@ -242,31 +255,28 @@
       git:
         repo: "{{ repo_url }}"
         dest: "{{ smai_path }}"
+        clone: yes
         update: yes
+        version: main
       when: not repo_stat.stat.exists
 
-    - name: ▶︎ 6c. Actualizar repo si existía
-      command: git pull
-      args:
-        chdir: "{{ smai_path }}"
-      when: repo_stat.stat.exists
-      changed_when: false
+    - name: ▶︎ 7a. Instalar dependencias npm
+      npm:
+        path: "{{ smai_path }}"
+        production: no
 
-    - name: ▶︎ 6d. Comprobar node_modules en frontend
-      stat:
-        path: "{{ smai_path }}/frontend/node_modules"
-      register: npm_stat
+    - name: ▶︎ 7b. Instalar dependencias backend con pip
+      pip:
+        requirements: "{{ smai_path }}/requirements.txt"
+        executable: pip3
 
-    - name: ▶︎ 6e. npm install si no existe node_modules
-      command: npm install
-      args:
-        chdir: "{{ smai_path }}/frontend"
-      when: not npm_stat.stat.exists
-
-    - name: ▶︎ 6f. Instalar requirements.txt del backend con pip
-      command: pip install -r requirements.txt
-      args:
-        chdir: "{{ smai_path }}/backend"
+    - name: ▶︎ 8. Configurar variables de entorno
+      copy:
+        dest: "{{ smai_path }}/.env"
+        content: |
+          PGUSER={{ pg_user }}
+          PGPASSWORD={{ pg_pass }}
+          PGDATABASE={{ pg_name }}
 
   handlers:
     - name: Reiniciar PostgreSQL
