@@ -263,10 +263,12 @@
         chdir: "{{ smai_path }}/frontend"
       when: not npm_stat.stat.exists
 
-    - name: ▶︎ 6f. Instalar requirements.txt del backend con pip
-      command: pip install --break-system-packages -r requirements.txt
+    - name: "▶︎ 6f. Instalar requirements.txt del backend con pip"
+      ansible.builtin.command: >
+        pip install -r requirements.txt
       args:
-        chdir: "{{ smai_path }}/backend"
+        chdir: /var/www/Smai3D/back
+
 
   handlers:
     - name: Reiniciar PostgreSQL
