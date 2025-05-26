@@ -53,10 +53,9 @@ Este repositorio contiene un playbook Ansible que configura **localmente** todo 
    ```bash
    sudo apt update
    sudo apt install -y ansible
-
-
-git clone https://github.com/McMiguel2004/smai-ansible.git
-cd smai-ansible
+   git clone https://github.com/McMiguel2004/smai-ansible.git
+   cd smai-ansible
 
 2. **Ejecutar el playbook1.**  
-   ```bash ansible-playbook -i inventory playbook.yml --ask-become-pass  ```
+   ```bash
+   ansible-playbook -i inventory playbook.yml --ask-become-pass  
