@@ -30,3 +30,34 @@ Este repositorio contiene un playbook Ansible que configura **localmente** todo 
 
 ## Estructura de archivos
 
+smai-ansible/
+├── inventory # Inventario local (localhost)
+├── playbook.yml # Playbook principal
+└── README.md # Documentación
+
+
+
+---
+
+## Requisitos Previos
+
+- Ubuntu 22.04 (o similar Debian-based)  
+- Conexión a Internet  
+- Permisos sudo  
+
+---
+
+## Instrucciones de Uso
+
+1. **Instalar Ansible**  
+   ```bash
+   sudo apt update
+   sudo apt install -y ansible
+
+
+git clone https://github.com/McMiguel2004/smai-ansible.git
+cd smai-ansible
+
+
+Ejecutar el playbook
+ansible-playbook -i inventory playbook.yml --ask-become-pass
