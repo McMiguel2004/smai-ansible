@@ -82,10 +82,18 @@
         state: present
       when: py_check.rc != 0
 
-    - name: ▶︎ 4c. Instalar psycopg2-binary para soporte PostgreSQL en Ansible
+    - name: ▶︎ 4c. Comprobar si psycopg2-binary está instalado
+      command: pip3 show psycopg2-binary
+      register: psycopg2_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: ▶︎ 4d. Instalar psycopg2-binary para soporte PostgreSQL en Ansible si falta
       pip:
         name: psycopg2-binary
         executable: pip3
+        state: present
+      when: psycopg2_check.rc != 0
 
     - name: ▶︎ 5a. Comprobar si PostgreSQL está instalado
       command: psql --version
