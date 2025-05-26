@@ -53,6 +53,7 @@ Este repositorio contiene un playbook Ansible que configura **localmente** todo 
    ```bash
    sudo apt update
    sudo apt install -y ansible
+   sudo apt install python3-pip
    git clone https://github.com/McMiguel2004/smai-ansible.git
    cd smai-ansible
 
