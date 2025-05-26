@@ -58,7 +58,6 @@ Este repositorio contiene un playbook Ansible que configura **localmente** todo 
 git clone https://github.com/McMiguel2004/smai-ansible.git
 cd smai-ansible
 
-Ejecutar el playbook
+2. **Ejecutar el playbook1.**  
    ```bash
-
 ansible-playbook -i inventory playbook.yml --ask-become-pass
