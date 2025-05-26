@@ -286,7 +286,7 @@
           %sudo ALL=(ALL) NOPASSWD: /usr/bin/docker
           %sudo ALL=(ALL) NOPASSWD: /usr/bin/docker-compose
           Defaults !requiretty
-      mode: '0440'
+        mode: '0440'
       when: not sudoers_stat.stat.exists
 
   handlers:
