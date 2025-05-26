@@ -10,7 +10,6 @@
 
   vars:
     repo_url: "https://github.com/McMiguel2004/smaiV2-main.git"
-    # Capturamos el HOME real del usuario que lanza ansible, no el de root
     user_home: "{{ lookup('env','HOME') }}"
     smai_path: "{{ user_home }}/SmaiV2"
     pg_user: "usuario"
@@ -230,9 +229,9 @@
       postgresql_query:
         db: smai
         query: |
-          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ pg_user }};
-          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ pg_user }};
-          GRANT ALL PRIVILEGES ON SCHEMA public TO {{ pg_user }};
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO '{{ pg_user }}';
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO '{{ pg_user }}';
+          GRANT ALL PRIVILEGES ON SCHEMA public TO '{{ pg_user }}';
 
     - name: ▶︎ 6a. Comprobar si repo existe
       stat:
@@ -251,6 +250,7 @@
       args:
         chdir: "{{ smai_path }}"
       when: repo_stat.stat.exists
+      changed_when: false
 
     - name: ▶︎ 6d. Comprobar node_modules en frontend
       stat:
@@ -279,7 +279,7 @@
         content: |
           www-data ALL=(ALL) NOPASSWD: /usr/bin/docker
           www-data ALL=(ALL) NOPASSWD: /usr/bin/docker *
-          {{ ansible_env.USER }} ALL=(ALL) NOPASSWD: /usr/bin/wg, /bin/cat, /bin/bash -c cat /tmp/peer_c>
+          {{ ansible_env.USER }} ALL=(ALL) NOPASSWD: /usr/bin/wg, /bin/cat, /bin/bash -c cat /tmp/peer_config
         owner: root
         group: root
         mode: '0440'
